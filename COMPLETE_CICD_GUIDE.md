@@ -204,7 +204,9 @@ npm run dev
 
 **Full Stack with Docker:**
 ```bash
-docker-compose -f docker-compose.fullstack.yml up
+docker compose
+ -f docker compose
+.fullstack.yml up
 ```
 
 Access:
@@ -350,12 +352,16 @@ Access:
 - **Standalone mode**: Optimized Next.js output
 
 ### **Docker Compose**
-- **Development**: `ml-backend/docker-compose.yml` (backend only)
-- **Full Stack**: `docker-compose.fullstack.yml` (frontend + backend + monitoring)
+- **Development**: `ml-backend/docker compose
+.yml` (backend only)
+- **Full Stack**: `docker compose
+.fullstack.yml` (frontend + backend + monitoring)
 
 **Start Full Stack:**
 ```bash
-docker-compose -f docker-compose.fullstack.yml up -d
+docker compose
+ -f docker compose
+.fullstack.yml up -d
 ```
 
 ---

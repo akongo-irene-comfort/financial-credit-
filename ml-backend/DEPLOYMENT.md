@@ -57,7 +57,8 @@ open http://localhost:8000/docs
 #### 1. Start All Services
 
 ```bash
-docker-compose up -d
+docker compose
+ up -d
 ```
 
 This starts:
@@ -86,13 +87,15 @@ http://localhost:3001
 #### 3. Stop Services
 
 ```bash
-docker-compose down
+docker compose
+ down
 ```
 
 #### 4. Clean Up (with volumes)
 
 ```bash
-docker-compose down -v
+docker compose
+ down -v
 ```
 
 ---
@@ -316,7 +319,8 @@ curl -X POST https://your-api-url/api/monitoring/drift \
 https://your-api-url/mlflow  # If exposed
 
 # Or use local MLflow
-docker-compose up mlflow
+docker compose
+ up mlflow
 open http://localhost:5000
 ```
 

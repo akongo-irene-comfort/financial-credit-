@@ -91,7 +91,8 @@ You now have a **complete, production-ready CI/CD pipeline** for your full-stack
 ### Docker Configuration
 ✅ `Dockerfile.frontend` - Multi-stage Next.js build
 ✅ `ml-backend/Dockerfile` - Multi-stage FastAPI build [Already exists]
-✅ `docker-compose.fullstack.yml` - Complete stack with monitoring
+✅ `docker compose
+.fullstack.yml` - Complete stack with monitoring
 ✅ `.dockerignore` - Optimize Docker builds
 
 ### Monitoring Setup

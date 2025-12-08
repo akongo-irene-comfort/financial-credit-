@@ -17,7 +17,8 @@ Use this checklist to ensure proper deployment setup.
 - [ ] Repository created and code pushed
 - [ ] All workflow files in `.github/workflows/`
 - [ ] Dockerfile.frontend in root directory
-- [ ] docker-compose.fullstack.yml in root
+- [ ] docker compose
+.fullstack.yml in root
 - [ ] render.yaml in root directory
 
 ### GitHub Secrets

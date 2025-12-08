@@ -31,7 +31,8 @@ Your Credit Scoring ML System now has a **complete production-ready CI/CD pipeli
 
 **Files**:
 - `ml-backend/Dockerfile` - Multi-stage production build
-- `ml-backend/docker-compose.yml` - Full orchestration
+- `ml-backend/docker compose
+.yml` - Full orchestration
 - `ml-backend/.dockerignore` - Optimized builds
 
 **Services Included**:
@@ -45,7 +46,8 @@ Your Credit Scoring ML System now has a **complete production-ready CI/CD pipeli
 **Quick Start**:
 ```bash
 cd ml-backend
-docker-compose up -d
+docker compose
+ up -d
 ```
 
 ---
@@ -192,7 +194,8 @@ System Metrics:
 cd ml-backend
 
 # 2. Start all services
-docker-compose up -d
+docker compose
+ up -d
 
 # 3. Verify deployment
 curl http://localhost:8000/health
@@ -390,19 +393,24 @@ Mean Time to Recovery: < 15 minutes
 
 ```bash
 # Start services
-docker-compose up -d
+docker compose
+ up -d
 
 # View logs
-docker-compose logs -f ml-backend
+docker compose
+ logs -f ml-backend
 
 # Stop services
-docker-compose down
+docker compose
+ down
 
 # Rebuild containers
-docker-compose build --no-cache
+docker compose
+ build --no-cache
 
 # Clean up everything
-docker-compose down -v
+docker compose
+ down -v
 ```
 
 ### **Testing Commands**
@@ -556,7 +564,8 @@ curl -X POST http://localhost:8000/api/monitoring/drift \
 1. **Start Local Development**
    ```bash
    cd ml-backend
-   docker-compose up -d
+   docker compose
+ up -d
    open http://localhost:8000/docs
    ```
 
@@ -591,9 +600,12 @@ curl -X POST http://localhost:8000/api/monitoring/drift \
 ## 💡 **Pro Tips**
 
 1. **For Development**:
-   - Use `docker-compose` for local testing
-   - Check logs: `docker-compose logs -f`
-   - Rebuild after changes: `docker-compose up --build`
+   - Use `docker compose
+` for local testing
+   - Check logs: `docker compose
+ logs -f`
+   - Rebuild after changes: `docker compose
+ up --build`
 
 2. **For Production**:
    - Use Render's Blueprint deployment
@@ -626,9 +638,12 @@ docker logs credit-scoring-ml-backend
 lsof -ti:8000 | xargs kill -9
 
 # Rebuild everything
-docker-compose down -v
-docker-compose build --no-cache
-docker-compose up -d
+docker compose
+ down -v
+docker compose
+ build --no-cache
+docker compose
+ up -d
 ```
 
 ### **Deployment Issues**
@@ -637,7 +652,8 @@ docker-compose up -d
 # Dashboard → Your Service → Logs
 
 # Test locally first
-docker-compose up
+docker compose
+ up
 curl http://localhost:8000/health
 
 # Verify environment variables

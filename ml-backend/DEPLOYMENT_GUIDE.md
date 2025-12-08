@@ -76,13 +76,16 @@ open http://localhost:8000/docs
 
 ```bash
 # Build and start all services
-docker-compose up -d
+docker compose
+ up -d
 
 # View logs
-docker-compose logs -f ml-backend
+docker compose
+ logs -f ml-backend
 
 # Stop services
-docker-compose down
+docker compose
+ down
 ```
 
 Services:
@@ -366,7 +369,8 @@ mkdir -p mlruns
 #### Issue: Out of memory errors
 ```bash
 # Solution: Increase Docker memory limit
-# In docker-compose.yml:
+# In docker compose
+.yml:
 services:
   ml-backend:
     deploy:
@@ -421,7 +425,8 @@ app = FastAPI(
 
 ```bash
 # Docker Compose
-docker-compose up --scale ml-backend=3
+docker compose
+ up --scale ml-backend=3
 
 # Kubernetes
 kubectl scale deployment ml-backend --replicas=5

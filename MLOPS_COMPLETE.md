@@ -82,7 +82,8 @@ Interpretability: SHAP/LIME explainability implemented
 - Optimized for production
 - Files:
   - `ml-backend/Dockerfile`
-  - `ml-backend/docker-compose.yml`
+  - `ml-backend/docker compose
+.yml`
 
 ✅ **c) Monitoring Design - Data Drift**
 ```python
@@ -292,7 +293,8 @@ project/
 │   │   └── ci-cd.yml            # ✅ Complete CI/CD pipeline
 │   │
 │   ├── Dockerfile                # ✅ Multi-stage Docker build
-│   ├── docker-compose.yml        # ✅ Full orchestration
+│   ├── docker compose
+.yml        # ✅ Full orchestration
 │   ├── requirements.txt          # ✅ All dependencies
 │   ├── render.yaml               # ✅ Render deployment config
 │   │
@@ -315,7 +317,8 @@ project/
 
 ```bash
 cd ml-backend
-docker-compose up -d
+docker compose
+ up -d
 
 # Access services
 ML API: http://localhost:8000
@@ -526,7 +529,8 @@ git clone <repo-url>
 cd ml-backend
 
 # 2. Start services
-docker-compose up -d
+docker compose
+ up -d
 
 # 3. Verify deployment
 curl http://localhost:8000/health
@@ -652,7 +656,8 @@ Your Credit Scoring ML system is:
 4. **Enable Continuous Monitoring**
    ```bash
    # Start drift monitoring worker
-   docker-compose up drift-monitor
+   docker compose
+ up drift-monitor
    ```
 
 5. **Set Up Automated Retraining**

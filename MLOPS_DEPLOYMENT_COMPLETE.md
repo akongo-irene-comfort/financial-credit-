@@ -56,7 +56,8 @@
 - Health checks included
 - Optimized image size (~800MB with ML libraries)
 
-#### Docker Compose (`ml-backend/docker-compose.yml`)
+#### Docker Compose (`ml-backend/docker compose
+.yml`)
 - **ml-backend service**: FastAPI application
 - **mlflow-ui service**: MLflow experiment tracking UI
 - Persistent volumes for models and MLruns
@@ -325,7 +326,8 @@ python scripts/setup_database.py --seed
 uvicorn app.main:app --reload --port 8000
 
 # Option 2: Use Docker Compose
-docker-compose up
+docker compose
+ up
 
 # Test API
 curl http://localhost:8000/health

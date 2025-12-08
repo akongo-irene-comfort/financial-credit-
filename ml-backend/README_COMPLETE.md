@@ -219,7 +219,8 @@ python scripts/setup_database.py --seed
 uvicorn app.main:app --reload --port 8000
 
 # Or use Docker Compose
-docker-compose up
+docker compose
+ up
 ```
 
 ### 6. Test API
@@ -541,7 +542,8 @@ ml_api_requests_total{method="POST",endpoint="/api/predict",status="200"} 5678
 
 ```bash
 # Docker Compose
-docker-compose up
+docker compose
+ up
 
 # Access services
 - API: http://localhost:8000
@@ -710,7 +712,8 @@ ml-backend/
 │   └── workflows/
 │       └── ci-cd.yml          # CI/CD pipeline
 ├── Dockerfile                  # Docker configuration
-├── docker-compose.yml          # Local development
+├── docker compose
+.yml          # Local development
 ├── requirements.txt            # Python dependencies
 ├── .env.example               # Environment template
 ├── render.yaml                # Render configuration

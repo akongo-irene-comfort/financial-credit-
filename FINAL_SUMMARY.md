@@ -54,7 +54,8 @@ A production-ready FastAPI backend with:
 
 ✅ **Docker Containerization**:
 - Multi-stage `Dockerfile`
-- `docker-compose.yml` with ML backend + MLflow UI
+- `docker compose
+.yml` with ML backend + MLflow UI
 - Volume persistence for models and experiments
 - Health checks and auto-restart
 
@@ -137,7 +138,8 @@ credit-scoring-system/
 │   │       └── drift_detector.py          # Drift detection (320 lines)
 │   │
 │   ├── Dockerfile                         # Multi-stage build
-│   ├── docker-compose.yml                 # ML backend + MLflow UI
+│   ├── docker compose
+.yml                 # ML backend + MLflow UI
 │   ├── requirements.txt                   # All dependencies
 │   ├── .dockerignore
 │   ├── .env.example
@@ -168,7 +170,8 @@ Total Files: 50+
 cd ml-backend
 
 # Start with Docker (RECOMMENDED)
-docker-compose up -d
+docker compose
+ up -d
 
 # OR start manually
 python -m venv venv
@@ -539,7 +542,8 @@ You now have a **complete, production-ready credit scoring system** that:
 
 ```bash
 # Start ML backend
-cd ml-backend && docker-compose up -d
+cd ml-backend && docker compose
+ up -d
 
 # Start frontend
 npm run dev
@@ -557,7 +561,8 @@ open http://localhost:5000
 cd ml-backend && pytest tests/
 
 # Stop everything
-docker-compose down
+docker compose
+ down
 ```
 
 ---

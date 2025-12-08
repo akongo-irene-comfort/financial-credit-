@@ -24,7 +24,8 @@ cd ml-backend
 ### 2. Start Services
 
 ```bash
-docker-compose up -d
+docker compose
+ up -d
 ```
 
 This starts:
@@ -143,13 +144,16 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 
 ```bash
 # Stop services
-docker-compose down
+docker compose
+ down
 
 # View logs
-docker-compose logs -f ml-backend
+docker compose
+ logs -f ml-backend
 
 # Rebuild container
-docker-compose build
+docker compose
+ build
 
 # Run tests
 pytest tests/
@@ -177,9 +181,12 @@ lsof -ti:8000 | xargs kill -9
 docker logs credit-scoring-ml-backend
 
 # Rebuild
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose
+ down
+docker compose
+ build --no-cache
+docker compose
+ up -d
 ```
 
 ### Model Not Found
@@ -204,7 +211,8 @@ curl -X POST http://localhost:8000/api/train -H "Content-Type: application/json"
 
 For issues or questions:
 1. Check [DEPLOYMENT.md](DEPLOYMENT.md)
-2. Review logs: `docker-compose logs`
+2. Review logs: `docker compose
+ logs`
 3. Create GitHub issue
 
 ---

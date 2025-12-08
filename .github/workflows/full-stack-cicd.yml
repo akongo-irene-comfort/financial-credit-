@@ -12,16 +12,12 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  # Job 1: Full System Integration Test
   integration-test:
     name: Full Stack Integration Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Docker Compose
-        run: docker-compose --version
-      
+
       - name: Create test environment file
         run: |
           cat > .env.test << EOF
@@ -29,12 +25,12 @@ jobs:
           DATABASE_URL=${{ secrets.NEON_DATABASE_URL }}
           ENVIRONMENT=test
           EOF
-      
+
       - name: Start services with Docker Compose
         run: |
-          docker-compose -f docker-compose.fullstack.yml up -d
+          docker compose -f docker-compose.fullstack.yml up -d
           sleep 30
-      
+
       - name: Check services health
         run: |
           echo "Checking backend..."
@@ -44,23 +40,23 @@ jobs:
           curl -f http://localhost:3000 || exit 1
           
           echo "✅ All services healthy!"
-      
+
       - name: Run end-to-end tests
         run: |
           echo "E2E tests would run here"
-          # npm run test:e2e (if you have Playwright/Cypress setup)
-      
+          # npm run test:e2e
+
       - name: Stop services
         if: always()
-        run: docker-compose -f docker-compose.fullstack.yml down
-      
+        run: docker compose -f docker-compose.fullstack.yml down
+
       - name: Show logs on failure
         if: failure()
         run: |
-          docker-compose -f docker-compose.fullstack.yml logs backend
-          docker-compose -f docker-compose.fullstack.yml logs frontend
+          docker compose -f docker-compose.fullstack.yml logs backend
+          docker compose -f docker-compose.fullstack.yml logs frontend
 
-  # Job 2: Deploy Full Stack
+
   deploy-full-stack:
     name: Deploy Full Stack to Production
     runs-on: ubuntu-latest
@@ -68,7 +64,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Deploy Backend
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -79,17 +75,17 @@ jobs:
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{"clearCache": false}'
-      
+
       - name: Wait for backend deployment
         run: sleep 90
-      
+
       - name: Verify backend deployment
         env:
           RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
           curl -f $RENDER_BACKEND_URL/health || exit 1
           echo "✅ Backend deployed successfully!"
-      
+
       - name: Deploy Frontend
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -100,33 +96,31 @@ jobs:
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{"clearCache": false}'
-      
+
       - name: Wait for frontend deployment
         run: sleep 60
-      
+
       - name: Verify frontend deployment
         env:
           RENDER_FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL }}
         run: |
           curl -f $RENDER_FRONTEND_URL || exit 1
           echo "✅ Frontend deployed successfully!"
-      
+
       - name: Run smoke tests
         env:
           RENDER_FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL }}
           RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          # Test backend endpoints
           curl -f $RENDER_BACKEND_URL/ || exit 1
           curl -f $RENDER_BACKEND_URL/health || exit 1
           curl -f $RENDER_BACKEND_URL/docs || echo "Docs check"
           
-          # Test frontend
           curl -f $RENDER_FRONTEND_URL || exit 1
           curl -f $RENDER_FRONTEND_URL/dashboard || exit 1
-          
+
           echo "✅ All smoke tests passed!"
-      
+
       - name: Deployment summary
         run: |
           echo "🎉 Full Stack Deployment Complete!"

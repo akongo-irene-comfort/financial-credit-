@@ -178,7 +178,8 @@ X_val, X_test, y_val, y_test = train_test_split(
 - **Health Check**: Built-in health monitoring
 - **Ports**: 8000 exposed
 
-**Docker Compose**: `ml-backend/docker-compose.yml`
+**Docker Compose**: `ml-backend/docker compose
+.yml`
 - **ML Backend**: Port 8000
 - **MLflow UI**: Port 5000
 - **Volumes**: Persist experiments, models, logs
@@ -485,7 +486,8 @@ credit-scoring-dashboard/
 │   │   └── monitoring/          # Drift detection
 │   │       └── drift_detector.py
 │   ├── Dockerfile               # Docker configuration
-│   ├── docker-compose.yml       # Multi-container setup
+│   ├── docker compose
+.yml       # Multi-container setup
 │   ├── requirements.txt         # Python dependencies
 │   ├── .github/workflows/       # CI/CD pipeline
 │   ├── README.md                # Backend documentation
@@ -503,7 +505,8 @@ credit-scoring-dashboard/
 ```bash
 # 1. Start Python ML Backend
 cd ml-backend
-docker-compose up -d
+docker compose
+ up -d
 
 # 2. Start Next.js Frontend
 cd ..

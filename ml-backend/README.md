@@ -77,7 +77,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 1. **Build and run with Docker Compose**
 ```bash
-docker-compose up -d
+docker compose
+ up -d
 ```
 
 2. **Access services**
@@ -86,7 +87,8 @@ docker-compose up -d
 
 3. **Stop services**
 ```bash
-docker-compose down
+docker compose
+ down
 ```
 
 ## 📚 API Endpoints
@@ -179,7 +181,8 @@ ml-backend/
 │   └── monitoring/             # Production monitoring
 │       └── drift_detector.py   # Drift detection
 ├── Dockerfile                  # Docker configuration
-├── docker-compose.yml          # Multi-container setup
+├── docker compose
+.yml          # Multi-container setup
 ├── requirements.txt            # Python dependencies
 └── README.md                   # This file
 ```

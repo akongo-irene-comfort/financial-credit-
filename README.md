@@ -161,7 +161,8 @@ bun dev
 cd ml-backend
 
 # Option A: Using Docker (Recommended)
-docker-compose up -d
+docker compose
+ up -d
 
 # Option B: Local Python
 pip install -r requirements.txt
@@ -229,7 +230,8 @@ credit-scoring-dashboard/
 │   ├── .github/workflows/
 │   │   └── ci-cd.yml                       # CI/CD pipeline
 │   ├── Dockerfile                          # Container config
-│   ├── docker-compose.yml                  # Multi-service setup
+│   ├── docker compose
+.yml                  # Multi-service setup
 │   ├── requirements.txt                    # Python deps
 │   ├── README.md                           # Backend docs
 │   └── DEPLOYMENT_GUIDE.md                 # Deploy instructions

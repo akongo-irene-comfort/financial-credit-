@@ -238,13 +238,19 @@ npm run dev
 
 ```bash
 # Start all services
-docker-compose -f docker-compose.fullstack.yml up -d
+docker compose
+ -f docker compose
+.fullstack.yml up -d
 
 # Check logs
-docker-compose -f docker-compose.fullstack.yml logs -f
+docker compose
+ -f docker compose
+.fullstack.yml logs -f
 
 # Stop services
-docker-compose -f docker-compose.fullstack.yml down
+docker compose
+ -f docker compose
+.fullstack.yml down
 ```
 
 **Services**:
@@ -262,7 +268,9 @@ docker-compose -f docker-compose.fullstack.yml down
 
 ```bash
 # Start monitoring stack
-docker-compose -f docker-compose.fullstack.yml up prometheus grafana -d
+docker compose
+ -f docker compose
+.fullstack.yml up prometheus grafana -d
 
 # Access Grafana
 open http://localhost:3001
