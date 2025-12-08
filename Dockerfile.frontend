@@ -1,14 +1,14 @@
 # Stage 1: Dependencies - Install ALL dependencies for build
-FROM oven/bun:1.1 AS deps
+FROM oven/bun:1-slim AS deps
 WORKDIR /app
 
 COPY package.json ./
 
 ENV BUN_INSTALL_NO_LOCKFILE=1
-RUN bun install
+RUN bun install --frozen-lockfile
 
 # Stage 2: Builder
-FROM oven/bun:1.1 AS builder
+FROM oven/bun:1-slim AS builder
 WORKDIR /app
 
 # Copy configuration files first
@@ -30,26 +30,17 @@ ENV NODE_ENV=production
 
 RUN bun run build
 
-# Stage 3: Production dependencies only
-FROM oven/bun:1.1 AS prod-deps
-WORKDIR /app
-
-COPY package.json ./
-ENV BUN_INSTALL_NO_LOCKFILE=1
-RUN bun install --production
-
-# Stage 4: Runner (Production)
-FROM oven/bun:1.1 AS runner
+# Stage 3: Runner (Production)
+FROM oven/bun:1-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy necessary files
+# Copy built application and only production node_modules
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package.json ./
-COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
 EXPOSE 3000
-CMD ["bun", "start"]
+CMD ["bun", "run", "start"]
