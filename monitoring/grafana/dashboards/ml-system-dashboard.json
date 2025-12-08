@@ -1,0 +1,64 @@
+{
+  "dashboard": {
+    "title": "ML System Monitoring",
+    "tags": ["ml", "credit-scoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Prediction Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(prediction_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Model Accuracy",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "model_accuracy",
+            "legendFormat": "{{model_type}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Drift Score",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "drift_score",
+            "legendFormat": "Drift Score"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "5xx errors"
+          }
+        ]
+      }
+    ]
+  }
+}

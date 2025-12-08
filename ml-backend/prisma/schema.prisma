@@ -1,0 +1,281 @@
+// Prisma Schema for ML Backend with Neon PostgreSQL
+// Stores predictions, model metrics, drift reports, and monitoring data
+
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Model Registry - Track all trained models
+model Model {
+  id                String   @id @default(cuid())
+  name              String
+  version           String
+  modelType         String   @map("model_type") // random_forest, xgboost, dnn, etc.
+  accuracy          Float
+  precision         Float
+  recall            Float
+  f1Score           Float    @map("f1_score")
+  aucRoc            Float    @map("auc_roc")
+  fairnessScore     Float    @map("fairness_score")
+  trainingDate      DateTime @map("training_date") @default(now())
+  isActive          Boolean  @map("is_active") @default(false)
+  hyperparameters   Json
+  featureImportance Json     @map("feature_importance")
+  
+  // Relations
+  predictions       Prediction[]
+  metrics           ModelMetric[]
+  driftReports      DriftReport[]
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("models")
+  @@index([modelType])
+  @@index([isActive])
+  @@index([trainingDate])
+}
+
+// Predictions - Log all predictions for monitoring
+model Prediction {
+  id              String   @id @default(cuid())
+  modelId         String   @map("model_id")
+  model           Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  
+  // Input features
+  features        Json
+  
+  // Prediction results
+  prediction      Int      // 0 or 1 (rejected or approved)
+  probability     Float    // Probability of approval
+  confidence      Float    // Model confidence
+  riskScore       Float    @map("risk_score")
+  
+  // Metadata
+  latency         Float    // Prediction latency in ms
+  timestamp       DateTime @default(now())
+  
+  // Optional ground truth for evaluation
+  groundTruth     Int?     @map("ground_truth")
+  feedbackDate    DateTime? @map("feedback_date")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("predictions")
+  @@index([modelId])
+  @@index([timestamp])
+  @@index([prediction])
+}
+
+// Model Metrics - Time series of model performance
+model ModelMetric {
+  id              String   @id @default(cuid())
+  modelId         String   @map("model_id")
+  model           Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  
+  // Performance metrics
+  accuracy        Float
+  precision       Float
+  recall          Float
+  f1Score         Float    @map("f1_score")
+  aucRoc          Float    @map("auc_roc")
+  
+  // Fairness metrics
+  demographicParity Float  @map("demographic_parity")
+  equalOpportunity  Float  @map("equal_opportunity")
+  disparateImpact   Float  @map("disparate_impact")
+  fairnessScore     Float  @map("fairness_score")
+  
+  // Business metrics
+  approvalRate    Float    @map("approval_rate")
+  avgLoanAmount   Float?   @map("avg_loan_amount")
+  
+  // Time window
+  periodStart     DateTime @map("period_start")
+  periodEnd       DateTime @map("period_end")
+  sampleSize      Int      @map("sample_size")
+  
+  timestamp       DateTime @default(now())
+  
+  @@map("model_metrics")
+  @@index([modelId])
+  @@index([timestamp])
+}
+
+// Drift Reports - Track data and model drift over time
+model DriftReport {
+  id                    String   @id @default(cuid())
+  modelId               String   @map("model_id")
+  model                 Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  
+  // Drift detection results
+  driftDetected         Boolean  @map("drift_detected")
+  driftScore            Float    @map("drift_score")
+  driftedFeatures       Json     @map("drifted_features") // List of drifted features
+  featureDriftScores    Json     @map("feature_drift_scores") // Feature-level scores
+  
+  // Prediction drift
+  predictionDrift       Json?    @map("prediction_drift")
+  
+  // Performance drift
+  performanceChange     Json?    @map("performance_change")
+  performanceDegraded   Boolean  @map("performance_degraded") @default(false)
+  
+  // Recommendations
+  recommendations       Json
+  alertLevel            String   @map("alert_level") // none, warning, critical
+  
+  // Data windows
+  referenceStart        DateTime @map("reference_start")
+  referenceEnd          DateTime @map("reference_end")
+  currentStart          DateTime @map("current_start")
+  currentEnd            DateTime @map("current_end")
+  
+  referenceSampleSize   Int      @map("reference_sample_size")
+  currentSampleSize     Int      @map("current_sample_size")
+  
+  timestamp             DateTime @default(now())
+  
+  @@map("drift_reports")
+  @@index([modelId])
+  @@index([timestamp])
+  @@index([driftDetected])
+  @@index([alertLevel])
+}
+
+// Experiment Tracking - MLflow experiments
+model Experiment {
+  id              String   @id @default(cuid())
+  experimentName  String   @map("experiment_name")
+  mlflowId        String?  @map("mlflow_id")
+  
+  // Experiment metadata
+  description     String?
+  tags            Json?
+  
+  // Results
+  runs            ExperimentRun[]
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("experiments")
+  @@index([experimentName])
+}
+
+// Experiment Runs - Individual training runs
+model ExperimentRun {
+  id              String   @id @default(cuid())
+  experimentId    String   @map("experiment_id")
+  experiment      Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  
+  mlflowRunId     String?  @map("mlflow_run_id")
+  
+  // Run parameters
+  modelType       String   @map("model_type")
+  hyperparameters Json
+  
+  // Run metrics
+  metrics         Json
+  
+  // Training info
+  trainingTime    Float?   @map("training_time") // seconds
+  sampleSize      Int      @map("sample_size")
+  
+  // Status
+  status          String   // running, completed, failed
+  errorMessage    String?  @map("error_message")
+  
+  startTime       DateTime @map("start_time") @default(now())
+  endTime         DateTime? @map("end_time")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("experiment_runs")
+  @@index([experimentId])
+  @@index([modelType])
+  @@index([status])
+}
+
+// Alerts - System alerts and notifications
+model Alert {
+  id          String   @id @default(cuid())
+  type        String   // drift, performance, system
+  severity    String   // info, warning, critical
+  title       String
+  message     String
+  source      String   // Model ID or system component
+  
+  // Alert data
+  data        Json?
+  
+  // Status
+  acknowledged Boolean @default(false)
+  resolved     Boolean @default(false)
+  
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  resolvedAt     DateTime? @map("resolved_at")
+  
+  timestamp   DateTime @default(now())
+  
+  @@map("alerts")
+  @@index([type])
+  @@index([severity])
+  @@index([acknowledged])
+  @@index([resolved])
+  @@index([timestamp])
+}
+
+// API Usage - Track API requests for monitoring
+model ApiUsage {
+  id            String   @id @default(cuid())
+  endpoint      String
+  method        String   // GET, POST, etc.
+  statusCode    Int      @map("status_code")
+  responseTime  Float    @map("response_time") // milliseconds
+  
+  // Request metadata
+  userAgent     String?  @map("user_agent")
+  ipAddress     String?  @map("ip_address")
+  
+  // Error tracking
+  errorType     String?  @map("error_type")
+  errorMessage  String?  @map("error_message")
+  
+  timestamp     DateTime @default(now())
+  
+  @@map("api_usage")
+  @@index([endpoint])
+  @@index([statusCode])
+  @@index([timestamp])
+}
+
+// System Health - Track system metrics
+model SystemHealth {
+  id            String   @id @default(cuid())
+  
+  // Resource metrics
+  cpuUsage      Float    @map("cpu_usage")
+  memoryUsage   Float    @map("memory_usage")
+  diskUsage     Float?   @map("disk_usage")
+  
+  // Service metrics
+  activeModels  Int      @map("active_models")
+  totalPredictions Int   @map("total_predictions")
+  avgLatency    Float    @map("avg_latency")
+  errorRate     Float    @map("error_rate")
+  
+  // Health status
+  status        String   // healthy, degraded, unhealthy
+  
+  timestamp     DateTime @default(now())
+  
+  @@map("system_health")
+  @@index([timestamp])
+  @@index([status])
+}

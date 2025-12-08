@@ -1,0 +1,81 @@
+# Prometheus alerting rules for ML model monitoring
+groups:
+  - name: ml_model_alerts
+    interval: 30s
+    rules:
+      # Data Drift Alert
+      - alert: DataDriftDetected
+        expr: drift_score > 0.7
+        for: 5m
+        labels:
+          severity: warning
+          component: drift_detection
+        annotations:
+          summary: "Data drift detected"
+          description: "Drift score {{ $value }} exceeds threshold. Consider model retraining."
+      
+      # Model Performance Degradation
+      - alert: ModelPerformanceDegraded
+        expr: model_accuracy < 0.80
+        for: 10m
+        labels:
+          severity: critical
+          component: model_performance
+        annotations:
+          summary: "Model accuracy below threshold"
+          description: "Model accuracy {{ $value }} has fallen below 80%. Immediate action required."
+      
+      # High Prediction Latency
+      - alert: HighPredictionLatency
+        expr: prediction_duration_seconds > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High prediction latency detected"
+          description: "Prediction latency {{ $value }}s exceeds 2 seconds."
+      
+      # API Error Rate
+      - alert: HighAPIErrorRate
+        expr: rate(api_errors_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate {{ $value }} exceeds 5%."
+      
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job="ml-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "ML API service is down"
+          description: "The ML API service has been down for more than 1 minute."
+      
+      # Memory Usage High
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90%."
+      
+      # CPU Usage High
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 90%."

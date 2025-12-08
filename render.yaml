@@ -1,0 +1,157 @@
+# Render Blueprint for Full Stack Credit Scoring System
+# Deploys: Frontend (Next.js) + Backend (FastAPI) + Workers
+
+services:
+  # ============================================
+  # BACKEND - FastAPI ML Service
+  # ============================================
+  - type: web
+    name: credit-scoring-ml-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: standard
+    branch: main
+    healthCheckPath: /health
+    autoDeploy: true
+    
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      
+      - key: ENVIRONMENT
+        value: production
+      
+      - key: PORT
+        value: 8000
+      
+      - key: WORKERS
+        value: 2
+      
+      - key: LOG_LEVEL
+        value: info
+      
+      - key: MLFLOW_TRACKING_URI
+        value: file:///app/mlruns
+      
+      - key: MODEL_STORAGE_PATH
+        value: /app/models
+      
+      - key: ENABLE_CORS
+        value: true
+      
+      - key: CORS_ORIGINS
+        value: "*"
+      
+      - key: PROMETHEUS_ENABLED
+        value: true
+      
+      - key: DRIFT_DETECTION_ENABLED
+        value: true
+      
+      - key: DRIFT_CHECK_INTERVAL
+        value: 3600
+    
+    disk:
+      name: ml-models-disk
+      mountPath: /app/models
+      sizeGB: 10
+    
+    scaling:
+      minInstances: 1
+      maxInstances: 3
+      targetMemoryPercent: 80
+      targetCPUPercent: 70
+
+  # ============================================
+  # FRONTEND - Next.js Application
+  # ============================================
+  - type: web
+    name: credit-scoring-frontend
+    env: docker
+    dockerfilePath: ./Dockerfile.frontend
+    dockerContext: .
+    region: oregon
+    plan: starter
+    branch: main
+    healthCheckPath: /
+    autoDeploy: true
+    
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://credit-scoring-ml-backend.onrender.com
+      
+      - key: NODE_ENV
+        value: production
+      
+      - key: PORT
+        value: 3000
+
+  # ============================================
+  # WORKER - Drift Monitoring
+  # ============================================
+  - type: worker
+    name: drift-monitor-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: starter
+    branch: main
+    dockerCommand: python -m app.workers.drift_monitor
+    
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      
+      - key: ENVIRONMENT
+        value: production
+      
+      - key: DRIFT_CHECK_INTERVAL
+        value: 3600
+      
+      - key: LOG_LEVEL
+        value: info
+
+  # ============================================
+  # CRON - Model Retraining Check
+  # ============================================
+  - type: cron
+    name: model-retraining-scheduler
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: starter
+    branch: main
+    schedule: "0 2 * * *"  # Daily at 2 AM UTC
+    dockerCommand: python -m app.workers.retraining_scheduler
+    
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      
+      - key: ENVIRONMENT
+        value: production
+
+  # ============================================
+  # CRON - System Health Check
+  # ============================================
+  - type: cron
+    name: system-health-monitor
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: starter
+    branch: main
+    schedule: "*/30 * * * *"  # Every 30 minutes
+    dockerCommand: python -m app.workers.system_health_monitor
+    
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      
+      - key: ENVIRONMENT
+        value: production

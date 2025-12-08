@@ -1,0 +1,122 @@
+# Render Blueprint for Credit Scoring ML API
+# https://render.com/docs/blueprint-spec
+
+services:
+  # FastAPI ML Backend Service
+  - type: web
+    name: credit-scoring-ml-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: standard
+    branch: main
+    healthCheckPath: /health
+    
+    # Auto-deploy on push to main
+    autoDeploy: true
+    
+    # Environment variables
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      
+      - key: PORT
+        value: 8000
+      
+      - key: WORKERS
+        value: 2
+      
+      - key: LOG_LEVEL
+        value: info
+      
+      - key: MLFLOW_TRACKING_URI
+        value: file:///app/mlruns
+      
+      - key: MODEL_STORAGE_PATH
+        value: /app/models
+      
+      - key: ENABLE_CORS
+        value: true
+      
+      - key: CORS_ORIGINS
+        value: "*"
+      
+      - key: PROMETHEUS_ENABLED
+        value: true
+      
+      - key: DRIFT_DETECTION_ENABLED
+        value: true
+      
+      - key: DRIFT_CHECK_INTERVAL
+        value: 3600  # 1 hour
+      
+      - key: SENTRY_DSN
+        sync: false
+        generateValue: false
+      
+      - key: API_KEY
+        generateValue: true
+    
+    # Persistent disk for models and data
+    disk:
+      name: ml-models-disk
+      mountPath: /app/models
+      sizeGB: 10
+    
+    # Resource scaling
+    scaling:
+      minInstances: 1
+      maxInstances: 3
+      targetMemoryPercent: 80
+      targetCPUPercent: 70
+
+# Background workers for monitoring
+  - type: worker
+    name: drift-monitor
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: starter
+    branch: main
+    
+    # Run drift detection worker
+    dockerCommand: python -m app.workers.drift_monitor
+    
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      
+      - key: DRIFT_CHECK_INTERVAL
+        value: 3600
+      
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+
+# Cron jobs for scheduled tasks
+  - type: cron
+    name: model-retraining-check
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-backend
+    region: oregon
+    plan: starter
+    branch: main
+    
+    # Run daily at 2 AM UTC
+    schedule: "0 2 * * *"
+    dockerCommand: python -m app.workers.retraining_scheduler
+    
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+# Databases (if needed)
+databases:
+  - name: ml-metrics-db
+    databaseName: mlmetrics
+    user: mluser
+    plan: starter
+    region: oregon
+    ipAllowList: []

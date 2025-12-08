@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  ml-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit-scoring-ml-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount code for development (comment out in production)
+      - ./app:/app/app
+      # Persist MLflow experiments
+      - ./mlruns:/app/mlruns
+      # Persist trained models
+      - ./models:/app/models
+      # Persist logs
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MLFLOW_TRACKING_URI=/app/mlruns
+      - LOG_LEVEL=INFO
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: MLflow UI for experiment tracking
+  mlflow-ui:
+    image: python:3.11-slim
+    container_name: mlflow-ui
+    command: >
+      sh -c "pip install mlflow==2.10.0 && 
+             mlflow ui --backend-store-uri /mlruns --host 0.0.0.0 --port 5000"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlruns
+    networks:
+      - ml-network
+    restart: unless-stopped
+    depends_on:
+      - ml-backend
+
+networks:
+  ml-network:
+    driver: bridge
+
+volumes:
+  mlruns:
+  models:
+  logs:

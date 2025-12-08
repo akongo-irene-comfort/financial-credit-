@@ -1,0 +1,148 @@
+name: Frontend CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'next.config.ts'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'public/**'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Lint and Type Check
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+      
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+  # Job 2: Build Application
+  build:
+    name: Build Next.js App
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+          retention-days: 7
+
+  # Job 3: Build Docker Image
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Frontend Docker image
+        run: |
+          docker build -f Dockerfile.frontend -t credit-scoring-frontend:latest .
+      
+      - name: Test Docker container
+        run: |
+          docker run -d -p 3000:3000 --name test-frontend \
+            -e NEXT_PUBLIC_API_URL=http://localhost:8000 \
+            credit-scoring-frontend:latest
+          sleep 15
+          curl -f http://localhost:3000 || exit 1
+          docker stop test-frontend
+      
+      - name: Login to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        continue-on-error: true
+      
+      - name: Push Docker image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker tag credit-scoring-frontend:latest ${{ secrets.DOCKER_USERNAME }}/credit-scoring-frontend:${{ github.sha }}
+          docker tag credit-scoring-frontend:latest ${{ secrets.DOCKER_USERNAME }}/credit-scoring-frontend:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/credit-scoring-frontend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/credit-scoring-frontend:latest
+        continue-on-error: true
+
+  # Job 4: Deploy to Render
+  deploy:
+    name: Deploy Frontend to Render
+    runs-on: ubuntu-latest
+    needs: [build, docker-build]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_FRONTEND_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+        run: |
+          curl -X POST "https://api.render.com/v1/services/$RENDER_FRONTEND_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
+      
+      - name: Wait for deployment
+        run: sleep 60
+      
+      - name: Smoke test production
+        env:
+          RENDER_FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL }}
+        run: |
+          curl -f $RENDER_FRONTEND_URL || exit 1
+          echo "✅ Frontend deployment successful!"
+      
+      - name: Deployment notification
+        run: |
+          echo "🚀 Frontend Deployment Complete!"
+          echo "URL: ${{ secrets.RENDER_FRONTEND_URL }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref }}"
