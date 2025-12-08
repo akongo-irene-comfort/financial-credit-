@@ -1,22 +1,28 @@
-# Stage 1: Dependencies
+# Stage 1: Dependencies - Install ALL dependencies for build
 FROM oven/bun:1.1 AS deps
 WORKDIR /app
 
-# Copy only package.json
 COPY package.json ./
 
-# Set environment to bypass lockfile
 ENV BUN_INSTALL_NO_LOCKFILE=1
-
-# Install without lockfile
-RUN bun install --production
+RUN bun install
 
 # Stage 2: Builder
 FROM oven/bun:1.1 AS builder
 WORKDIR /app
 
-# Copy source code
-COPY . .
+# Copy configuration files first
+COPY next.config.* ./
+COPY tsconfig.json ./
+COPY tailwind.config.* ./
+COPY postcss.config.* ./
+COPY package.json ./
+
+# Copy source code explicitly
+COPY src ./src
+COPY public ./public
+
+# Copy node_modules from deps
 COPY --from=deps /app/node_modules ./node_modules
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -24,7 +30,15 @@ ENV NODE_ENV=production
 
 RUN bun run build
 
-# Stage 3: Runner (Production)
+# Stage 3: Production dependencies only
+FROM oven/bun:1.1 AS prod-deps
+WORKDIR /app
+
+COPY package.json ./
+ENV BUN_INSTALL_NO_LOCKFILE=1
+RUN bun install --production
+
+# Stage 4: Runner (Production)
 FROM oven/bun:1.1 AS runner
 WORKDIR /app
 
@@ -35,8 +49,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/package.json ./
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
 
-# Expose port and start app
 EXPOSE 3000
 CMD ["bun", "start"]
