@@ -2,8 +2,9 @@
 FROM oven/bun:1.0 AS deps
 WORKDIR /app
 
-# Copy package.json and lockfile
-COPY package.json bun.lockb ./    # <-- include your bun.lockb file ./
+# Copy package.json and lockfile (bun.lock)
+COPY package.json bun.lockb ./            
+
 RUN bun install --ci --production
 
 # Stage 2: Builder
@@ -29,7 +30,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Copy only necessary files for production
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./ .next/
-COPY --from=builder /app/package.json ./
+COPY --from=builder /app/package.json ./ 
 
 # Expose port and start app
 EXPOSE 3000
