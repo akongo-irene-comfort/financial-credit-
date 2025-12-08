@@ -2,11 +2,11 @@
 FROM oven/bun:1.0 AS deps
 WORKDIR /app
 
-# Copy package.json and lockfile if it exists
+# Copy package.json only (no lockfile)
 COPY package.json ./
-COPY bun.lock* ./
 
-RUN bun install --production
+# Install without lockfile
+RUN bun install --production --no-save
 
 # Stage 2: Builder
 FROM oven/bun:1.0 AS builder
@@ -31,7 +31,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Copy only necessary files for production
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package.json ./ 
+COPY --from=builder /app/package.json ./
+COPY --from=deps /app/node_modules ./node_modules
 
 # Expose port and start app
 EXPOSE 3000
