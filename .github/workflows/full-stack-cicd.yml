@@ -51,9 +51,7 @@ jobs:
           
           services:
             backend:
-              build:
-                context: .
-                dockerfile: Dockerfile.backend
+              build: .
               container_name: credit-scoring-backend-test
               ports:
                 - "8000:8000"
@@ -98,6 +96,15 @@ jobs:
               environment:
                 - MLFLOW_TRACKING_URI=http://localhost:5000
           EOF
+
+      - name: Check Dockerfile exists
+        run: |
+          echo "Checking for Dockerfiles..."
+          ls -la Dockerfile* || echo "No Dockerfiles found"
+          echo "Checking for Dockerfile..."
+          ls -la Dockerfile || echo "No Dockerfile found"
+          echo "Checking directory structure..."
+          find . -name "Dockerfile*" -type f | head -20
 
       - name: Start services with Docker Compose
         run: |
