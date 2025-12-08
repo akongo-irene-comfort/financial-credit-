@@ -2,10 +2,10 @@
 FROM oven/bun:1.0 AS deps
 WORKDIR /app
 
-# Copy package.json and lockfile
-COPY package.json bun.lock ./            
+# Copy package.json and lockfile if it exists
+COPY package.json ./
+COPY bun.lock* ./
 
-# Remove --ci flag temporarily to allow lockfile updates
 RUN bun install --production
 
 # Stage 2: Builder
