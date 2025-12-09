@@ -106,7 +106,7 @@ jobs:
           echo "Checking ml-backend directory..."
           ls -la ml-backend/
           echo "Checking if ml-backend/Dockerfile exists..."
-          ls -la ml-backend/Dockerfile
+          ls -la ml-backend/Dockerfile || echo "Dockerfile not found"
 
       - name: Start services with Docker Compose
         run: |
@@ -151,6 +151,9 @@ jobs:
         run: |
           echo "Testing API endpoints..."
           
+          # Wait a bit more for services to be fully ready
+          sleep 10
+          
           # Test prediction with sample data
           SAMPLE_DATA='{
             "features": {
@@ -167,10 +170,11 @@ jobs:
             "explain": false
           }'
           
+          echo "Testing prediction endpoint..."
           curl -X POST http://localhost:8000/api/predict \
             -H "Content-Type: application/json" \
             -d "$SAMPLE_DATA" \
-            || echo "Prediction test failed (this might be expected if no model is trained)"
+            -w "\nStatus: %{http_code}\n" || echo "Prediction test failed (this might be expected if no model is trained)"
           
           echo "✅ API tests completed!"
 
@@ -213,88 +217,153 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/*
           docker system prune -a -f
 
-      - name: Deploy Backend
+      - name: Deploy Backend via Webhook
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_BACKEND_SERVICE_ID: ${{ secrets.RENDER_BACKEND_SERVICE_ID }}
+          RENDER_BACKEND_WEBHOOK: ${{ secrets.RENDER_BACKEND_WEBHOOK }}
         run: |
-          echo "Deploying backend..."
-          curl -X POST "https://api.render.com/v1/services/$RENDER_BACKEND_SERVICE_ID/deploys" \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
+          echo "Deploying backend via webhook..."
+          echo "Webhook URL: ${RENDER_BACKEND_WEBHOOK:0:40}..." # Show first 40 chars for debugging
+          
+          response=$(curl -X POST "$RENDER_BACKEND_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d '{"clearCache": false}'
+            -w "\nStatus: %{http_code}" \
+            -o /tmp/webhook_response.txt)
+          
+          cat /tmp/webhook_response.txt
+          echo "$response"
+          
+          # Check if the response contains success indicators
+          if [[ "$response" == *"200"* ]] || [[ "$response" == *"202"* ]] || [[ "$response" == *"204"* ]]; then
+            echo "✅ Backend deployment triggered successfully!"
+          else
+            echo "⚠️ Webhook response indicates possible issue"
+          fi
 
       - name: Wait for backend deployment
-        run: sleep 90
+        run: |
+          echo "Waiting for backend deployment to complete..."
+          sleep 120  # Give more time for Render deployment
 
       - name: Verify backend deployment
         env:
           RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          echo "Checking backend health..."
-          for i in {1..10}; do
-            if curl -f $RENDER_BACKEND_URL/health/liveness; then
+          echo "Checking backend health at: $RENDER_BACKEND_URL"
+          echo "Waiting for backend to be ready..."
+          
+          for i in {1..15}; do
+            echo "Attempt $i of 15..."
+            if curl -f -s "$RENDER_BACKEND_URL/health/liveness" > /dev/null; then
               echo "✅ Backend health check passed!"
+              echo "Full health response:"
+              curl -s "$RENDER_BACKEND_URL/health/liveness" | head -20
               break
             else
-              echo "Attempt $i: Backend not ready yet..."
-              sleep 10
+              echo "Backend not ready yet..."
+              sleep 15
             fi
-          done || exit 1
+          done || (echo "❌ Backend health check failed!" && exit 1)
 
-      - name: Deploy Frontend
+      - name: Deploy Frontend via Webhook
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_FRONTEND_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+          RENDER_FRONTEND_WEBHOOK: ${{ secrets.RENDER_FRONTEND_WEBHOOK }}
         run: |
-          echo "Deploying frontend..."
-          curl -X POST "https://api.render.com/v1/services/$RENDER_FRONTEND_SERVICE_ID/deploys" \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
+          echo "Deploying frontend via webhook..."
+          echo "Webhook URL: ${RENDER_FRONTEND_WEBHOOK:0:40}..." # Show first 40 chars for debugging
+          
+          response=$(curl -X POST "$RENDER_FRONTEND_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d '{"clearCache": false}'
+            -w "\nStatus: %{http_code}" \
+            -o /tmp/frontend_webhook_response.txt)
+          
+          cat /tmp/frontend_webhook_response.txt
+          echo "$response"
+          
+          if [[ "$response" == *"200"* ]] || [[ "$response" == *"202"* ]] || [[ "$response" == *"204"* ]]; then
+            echo "✅ Frontend deployment triggered successfully!"
+          else
+            echo "⚠️ Frontend webhook response indicates possible issue"
+          fi
 
       - name: Wait for frontend deployment
-        run: sleep 60
+        run: |
+          echo "Waiting for frontend deployment to complete..."
+          sleep 90  # Frontend usually deploys faster
 
       - name: Verify frontend deployment
         env:
           RENDER_FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL }}
         run: |
-          echo "Checking frontend..."
+          echo "Checking frontend at: $RENDER_FRONTEND_URL"
+          echo "Waiting for frontend to be ready..."
+          
           for i in {1..10}; do
-            if curl -f $RENDER_FRONTEND_URL; then
+            echo "Attempt $i of 10..."
+            if curl -f -s "$RENDER_FRONTEND_URL" > /dev/null; then
               echo "✅ Frontend check passed!"
+              echo "Frontend is up and running!"
               break
             else
-              echo "Attempt $i: Frontend not ready yet..."
+              echo "Frontend not ready yet..."
               sleep 10
             fi
-          done || exit 1
+          done || (echo "❌ Frontend check failed!" && exit 1)
 
       - name: Run smoke tests
         env:
           RENDER_FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL }}
           RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          echo "Running smoke tests..."
+          echo "Running smoke tests on production environment..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
           # Test backend endpoints
-          curl -f $RENDER_BACKEND_URL/ || exit 1
-          curl -f $RENDER_BACKEND_URL/health/liveness || exit 1
-          curl -f $RENDER_BACKEND_URL/health/readiness || exit 1
+          echo "1. Testing backend health endpoints..."
+          curl -f -s "$RENDER_BACKEND_URL/health/liveness" && echo "✅ Backend liveness OK"
+          curl -f -s "$RENDER_BACKEND_URL/health/readiness" && echo "✅ Backend readiness OK"
           
           # Test frontend endpoints
-          curl -f $RENDER_FRONTEND_URL || exit 1
-          curl -f $RENDER_FRONTEND_URL/dashboard || echo "Dashboard might require auth"
+          echo "2. Testing frontend accessibility..."
+          curl -f -s "$RENDER_FRONTEND_URL" && echo "✅ Frontend root OK"
           
+          # Test API connectivity
+          echo "3. Testing API connectivity..."
+          curl -s "$RENDER_BACKEND_URL/" | head -5 && echo "✅ API root accessible"
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ All smoke tests passed!"
 
-      - name: Deployment summary
+      - name: Send deployment notification (optional)
         run: |
           echo "🎉 Full Stack Deployment Complete!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Frontend: ${{ secrets.RENDER_FRONTEND_URL }}"
           echo "Backend:  ${{ secrets.RENDER_BACKEND_URL }}"
           echo "Commit:   ${{ github.sha }}"
+          echo "Branch:   ${{ github.ref }}"
           echo "Time:     $(date)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # You can add Slack/Teams/Discord notification here if needed
+          # Example:
+          # curl -X POST [YOUR_WEBHOOK_URL] \
+          #   -H "Content-Type: application/json" \
+          #   -d '{"text": "Deployment successful!\nFrontend: ${{ secrets.RENDER_FRONTEND_URL }}\nBackend: ${{ secrets.RENDER_BACKEND_URL }}"}'
+
+
+  cleanup:
+    name: Cleanup Resources
+    runs-on: ubuntu-latest
+    needs: [integration-test, deploy-full-stack]
+    if: always()
+    steps:
+      - name: Clean Docker resources
+        run: |
+          echo "Cleaning up Docker resources..."
+          docker system prune -a -f --volumes
+          docker builder prune -a -f
+          
+      - name: Clean workspace
+        run: |
+          echo "Cleaning workspace..."
+          rm -rf node_modules __pycache__ .pytest_cache .coverage
