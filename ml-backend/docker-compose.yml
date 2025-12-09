@@ -1,58 +1,136 @@
-version: '3.8'
-
 services:
-  ml-backend:
+  # Backend - FastAPI ML Service
+  backend:
     build:
-      context: .
+      context: ./ml-backend
       dockerfile: Dockerfile
-    container_name: credit-scoring-ml-backend
+    container_name: credit-scoring-backend
     ports:
       - "8000:8000"
-    volumes:
-      # Mount code for development (comment out in production)
-      - ./app:/app/app
-      # Persist MLflow experiments
-      - ./mlruns:/app/mlruns
-      # Persist trained models
-      - ./models:/app/models
-      # Persist logs
-      - ./logs:/app/logs
     environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@database:5432/credit_scoring}
+      - ENVIRONMENT=production
       - PYTHONUNBUFFERED=1
-      - MLFLOW_TRACKING_URI=/app/mlruns
+      - MLFLOW_TRACKING_URI=http://mlflow-ui:5000
       - LOG_LEVEL=INFO
+      - PROMETHEUS_ENABLED=true
+      - DRIFT_DETECTION_ENABLED=true
+    volumes:
+      - ./ml-backend/mlruns:/app/mlruns
+      - ./ml-backend/models:/app/models
+      - ./ml-backend/logs:/app/logs
     networks:
-      - ml-network
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - mlflow-ui
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; r = requests.get('http://localhost:8000/health/liveness'); exit(0 if r.status_code == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Frontend - Next.js Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: credit-scoring-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Optional: MLflow UI for experiment tracking
+  # Database - PostgreSQL (optional, add if needed)
+  database:
+    image: postgres:15-alpine
+    container_name: credit-scoring-database
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=credit_scoring
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Grafana - Monitoring Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # MLflow UI - Experiment Tracking
   mlflow-ui:
-    image: python:3.11-slim
+    image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow-ui
-    command: >
-      sh -c "pip install mlflow==2.10.0 && 
-             mlflow ui --backend-store-uri /mlruns --host 0.0.0.0 --port 5000"
+    command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./artifacts --host 0.0.0.0 --port 5000
     ports:
       - "5000:5000"
     volumes:
-      - ./mlruns:/mlruns
+      - ./ml-backend/mlruns:/mlflow.db
     networks:
-      - ml-network
+      - app-network
     restart: unless-stopped
-    depends_on:
-      - ml-backend
 
 networks:
-  ml-network:
+  app-network:
     driver: bridge
 
 volumes:
-  mlruns:
-  models:
-  logs:
+  prometheus-data:
+  grafana-data:
+  postgres-data:
