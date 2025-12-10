@@ -34,6 +34,8 @@ jobs:
       
       - name: Install dependencies
         run: npm install
+
+
       
       - name: Run ESLint
         run: npm run lint
@@ -57,6 +59,8 @@ jobs:
       
       - name: Install dependencies
         run: npm install
+
+
       
       - name: Build application
         run: npm run build
@@ -110,3 +114,40 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/credit-scoring-frontend:${{ github.sha }}
           docker push ${{ secrets.DOCKER_USERNAME }}/credit-scoring-frontend:latest
         continue-on-error: true
+
+  # Job 4: Deploy to Render
+  deploy:
+    name: Deploy Frontend to Render
+    runs-on: ubuntu-latest
+    needs: [build, docker-build]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_FRONTEND_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+        run: |
+          curl -X POST "https://api.render.com/v1/services/$RENDER_FRONTEND_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
+      
+      - name: Wait for deployment
+        run: sleep 60
+      
+      - name: Smoke test production
+        env:
+          RENDER_FRONTEND_URL: ${{ secrets.RENDER_FRONTEND_URL }}
+        run: |
+          curl -f $RENDER_FRONTEND_URL || exit 1
+          echo "✅ Frontend deployment successful!"
+      
+      - name: Deployment notification
+        run: |
+          echo "🚀 Frontend Deployment Complete!"
+          echo "URL: ${{ secrets.RENDER_FRONTEND_URL }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref }}"
+
