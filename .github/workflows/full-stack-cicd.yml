@@ -312,92 +312,89 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      # - name: Setup SSH for Render (if using Git deploy)
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     echo "${{ secrets.RENDER_SSH_KEY }}" > ~/.ssh/id_rsa
-      #     chmod 600 ~/.ssh/id_rsa
-      #     ssh-keyscan -H deploy.render.com >> ~/.ssh/known_hosts
-      #   if: secrets.RENDER_SSH_KEY
 
       - name: Deploy using Render webhook
         env:
-          RENDER_DEPLOY_WEBHOOK: ${{ secrets.RENDER_DEPLOY_WEBHOOK }}
-          RENDER_DEPLOY_URL: ${{ secrets.RENDER_DEPLOY_URL }}
+          RENDER_WEBHOOK_URL: ${{ secrets.RENDER_WEBHOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           echo "🚀 Starting deployment to Render..."
           
-          if [ -z "$RENDER_DEPLOY_WEBHOOK" ] && [ -z "$RENDER_DEPLOY_URL" ]; then
-            echo "❌ No deployment method configured!"
-            echo "Please set either RENDER_DEPLOY_WEBHOOK or RENDER_DEPLOY_URL secret"
-            echo "For webhook: Go to Render Dashboard → Your Service → Settings → Deploy Hooks"
-            echo "For URL: Use your Render service URL (e.g., https://your-service.onrender.com)"
+          if [ -z "$RENDER_WEBHOOK_URL" ]; then
+            echo "❌ RENDER_WEBHOOK_URL secret is not set!"
+            echo ""
+            echo "📝 To set up deployment:"
+            echo "1. Go to Render Dashboard: https://dashboard.render.com"
+            echo "2. Select your service"
+            echo "3. Go to Settings → Deploy Hook"
+            echo "4. Copy the Deploy Hook URL"
+            echo "5. In GitHub: Settings → Secrets → Actions → New repository secret"
+            echo "6. Name: RENDER_WEBHOOK_URL"
+            echo "7. Value: [paste your deploy hook URL]"
+            echo ""
             exit 1
           fi
           
-          # Try webhook first (recommended)
-          if [ -n "$RENDER_DEPLOY_WEBHOOK" ]; then
-            echo "📤 Using webhook deployment..."
-            echo "Webhook URL exists (length: ${#RENDER_DEPLOY_WEBHOOK} chars)"
-            
-            # Test webhook URL format
-            if [[ "$RENDER_DEPLOY_WEBHOOK" =~ ^https?:// ]]; then
-              echo "✅ Webhook URL format looks good"
-            else
-              echo "⚠️ Webhook URL might be malformed"
-            fi
-            
-            # Make the deployment request
-            response=$(curl -s -X POST "$RENDER_DEPLOY_WEBHOOK" \
-              -H "Content-Type: application/json" \
-              -w "\nHTTP_STATUS:%{http_code}" \
-              -o /tmp/deploy_response.txt)
-            
-            http_status=$(echo "$response" | grep "HTTP_STATUS:" | cut -d':' -f2)
-            echo "Webhook Response HTTP Status: $http_status"
-            
-            if [ -f "/tmp/deploy_response.txt" ]; then
-              echo "Webhook Response Body:"
-              cat /tmp/deploy_response.txt
-              echo ""
-            fi
-            
-            if [[ "$http_status" == "200" ]] || [[ "$http_status" == "202" ]] || [[ "$http_status" == "204" ]]; then
-              echo "✅ Deployment triggered successfully via webhook!"
-            else
-              echo "⚠️ Webhook returned status: $http_status"
-              echo "Trying alternative deployment method..."
-            fi
+          echo "📤 Deploying via webhook..."
+          echo "Webhook URL configured (length: ${#RENDER_WEBHOOK_URL} chars)"
+          
+          # Validate webhook URL format
+          if [[ "$RENDER_WEBHOOK_URL" =~ ^https://api\.render\.com/deploy/ ]]; then
+            echo "✅ Webhook URL format is correct"
+          else
+            echo "⚠️ Warning: Webhook URL format looks unusual"
+            echo "Expected format: https://api.render.com/deploy/srv-xxxxx?key=xxxxx"
           fi
           
-          # Alternative: Try direct deploy via Render service URL
-          if [ -n "$RENDER_DEPLOY_URL" ] && [[ "$http_status" != "200" && "$http_status" != "202" && "$http_status" != "204" ]]; then
-            echo "🌐 Trying direct deployment via service URL..."
-            
-            # Render services often have a /deploy endpoint or webhook
-            DEPLOY_ENDPOINT="$RENDER_DEPLOY_URL/deploy"
-            
-            echo "Attempting deployment to: $DEPLOY_ENDPOINT"
-            
-            # Try common deployment endpoints
-            for endpoint in "$DEPLOY_ENDPOINT" "$RENDER_DEPLOY_URL" "https://api.render.com/deploy/$RENDER_DEPLOY_URL"; do
-              echo "Trying endpoint: $endpoint"
-              if curl -s -f "$endpoint" > /dev/null 2>&1; then
-                echo "✅ Service is accessible at: $endpoint"
-                break
-              fi
-            done
-            
-            echo "📝 Note: Direct deployment might require manual trigger in Render dashboard"
+          # Make the deployment request
+          echo "Triggering deployment..."
+          response=$(curl -s -X POST "$RENDER_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            -o /tmp/deploy_response.txt 2>&1)
+          
+          curl_exit_code=$?
+          http_status=$(echo "$response" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          
+          echo "Curl exit code: $curl_exit_code"
+          echo "HTTP Status: $http_status"
+          
+          if [ -f "/tmp/deploy_response.txt" ]; then
+            echo ""
+            echo "Response body:"
+            cat /tmp/deploy_response.txt
+            echo ""
           fi
           
-          echo "📋 Deployment initiated. Check Render dashboard for progress."
+          # Check deployment status
+          if [ $curl_exit_code -eq 0 ]; then
+            if [[ "$http_status" == "200" ]] || [[ "$http_status" == "201" ]] || [[ "$http_status" == "202" ]] || [[ "$http_status" == "204" ]]; then
+              echo "✅ Deployment triggered successfully!"
+              echo "📋 Check your Render dashboard for deployment progress"
+            elif [[ "$http_status" == "401" ]] || [[ "$http_status" == "403" ]]; then
+              echo "❌ Authentication failed (HTTP $http_status)"
+              echo "Your webhook URL might be invalid or expired"
+              echo "Please regenerate the Deploy Hook in Render Dashboard"
+              exit 1
+            elif [[ "$http_status" == "404" ]]; then
+              echo "❌ Service not found (HTTP 404)"
+              echo "Your webhook URL might be incorrect"
+              exit 1
+            else
+              echo "⚠️ Unexpected response (HTTP $http_status)"
+              echo "Deployment might still have been triggered"
+            fi
+          else
+            echo "❌ Failed to connect to Render API"
+            echo "Check your internet connection and webhook URL"
+            exit 1
+          fi
 
       - name: Wait for deployment
         run: |
           echo "⏳ Waiting for deployment to complete..."
           echo "Render deployments typically take 5-10 minutes"
+          echo "You can monitor progress in your Render dashboard"
           sleep 300  # 5 minutes wait
 
       - name: Verify deployment
@@ -408,37 +405,51 @@ jobs:
           
           if [ -z "$RENDER_SERVICE_URL" ]; then
             echo "⚠️ RENDER_SERVICE_URL not set, skipping verification"
-            echo "Please set RENDER_SERVICE_URL to your deployed service URL"
+            echo ""
+            echo "📝 To enable automatic verification:"
+            echo "1. In GitHub: Settings → Secrets → Actions → New repository secret"
+            echo "2. Name: RENDER_SERVICE_URL"
+            echo "3. Value: https://your-service.onrender.com"
+            echo ""
             exit 0
           fi
           
           echo "Checking service at: $RENDER_SERVICE_URL"
           
           # Try multiple endpoints with retries
+          deployment_verified=false
+          
           for attempt in {1..10}; do
-            echo "Attempt $attempt of 10..."
+            echo ""
+            echo "Verification attempt $attempt of 10..."
             
             # Try root endpoint
-            if curl -s -f "$RENDER_SERVICE_URL/" > /dev/null; then
+            if curl -s -f "$RENDER_SERVICE_URL/" > /dev/null 2>&1; then
               echo "✅ Service root is accessible!"
+              deployment_verified=true
               
               # Try health endpoints if available
-              if curl -s -f "$RENDER_SERVICE_URL/health" > /dev/null; then
+              if curl -s -f "$RENDER_SERVICE_URL/health" > /dev/null 2>&1; then
                 echo "✅ Health endpoint is working!"
                 HEALTH_RESPONSE=$(curl -s "$RENDER_SERVICE_URL/health")
                 echo "Health response: $HEALTH_RESPONSE"
               fi
               
-              if curl -s -f "$RENDER_SERVICE_URL/api/predict" > /dev/null; then
-                echo "✅ API endpoint is accessible!"
+              if curl -s -f "$RENDER_SERVICE_URL/health/liveness" > /dev/null 2>&1; then
+                echo "✅ Liveness endpoint is working!"
               fi
               
               break
             else
-              echo "Service not ready yet, waiting 30 seconds..."
+              echo "⏳ Service not ready yet, waiting 30 seconds..."
               sleep 30
             fi
-          done || echo "⚠️ Service verification incomplete or timed out"
+          done
+          
+          if [ "$deployment_verified" = false ]; then
+            echo "⚠️ Could not verify deployment after 10 attempts"
+            echo "The service might still be deploying. Check Render dashboard."
+          fi
 
       - name: Run smoke tests
         env:
@@ -452,17 +463,37 @@ jobs:
           fi
           
           echo "Testing endpoints on: $RENDER_SERVICE_URL"
+          echo ""
           
           # Test basic accessibility
           echo "1. Testing service accessibility..."
-          curl -s -f "$RENDER_SERVICE_URL" && echo "✅ Service root accessible"
+          if curl -s -f "$RENDER_SERVICE_URL" > /dev/null 2>&1; then
+            echo "✅ Service root accessible"
+          else
+            echo "❌ Service root not accessible"
+          fi
           
-          # Test API if available
-          echo "2. Testing API endpoints..."
-          curl -s "$RENDER_SERVICE_URL/health" && echo "✅ Health endpoint accessible" || echo "⚠️ Health endpoint not available"
+          # Test health endpoint
+          echo ""
+          echo "2. Testing health endpoints..."
+          if curl -s -f "$RENDER_SERVICE_URL/health" > /dev/null 2>&1; then
+            echo "✅ Health endpoint accessible"
+          else
+            echo "⚠️ Health endpoint not available"
+          fi
           
-          # Test with sample data
-          echo "3. Testing prediction with sample data..."
+          # Test API docs
+          echo ""
+          echo "3. Testing API documentation..."
+          if curl -s -f "$RENDER_SERVICE_URL/docs" > /dev/null 2>&1; then
+            echo "✅ API docs accessible at $RENDER_SERVICE_URL/docs"
+          else
+            echo "⚠️ API docs not available"
+          fi
+          
+          # Test prediction endpoint
+          echo ""
+          echo "4. Testing prediction endpoint..."
           SAMPLE_DATA='{
             "features": {
               "person_age": 35,
@@ -478,35 +509,57 @@ jobs:
             "explain": false
           }'
           
-          curl -X POST "$RENDER_SERVICE_URL/api/predict" \
+          prediction_response=$(curl -s -X POST "$RENDER_SERVICE_URL/api/predict" \
             -H "Content-Type: application/json" \
             -d "$SAMPLE_DATA" \
-            -w "\nStatus: %{http_code}\n" && echo "✅ Prediction test completed" || echo "⚠️ Prediction test failed (might need model)"
+            -w "\nHTTP_STATUS:%{http_code}" \
+            -o /tmp/prediction_response.txt 2>&1)
           
+          pred_status=$(echo "$prediction_response" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          
+          if [[ "$pred_status" == "200" ]] || [[ "$pred_status" == "201" ]]; then
+            echo "✅ Prediction endpoint working!"
+            if [ -f "/tmp/prediction_response.txt" ]; then
+              echo "Response:"
+              cat /tmp/prediction_response.txt
+            fi
+          else
+            echo "⚠️ Prediction endpoint returned status: $pred_status"
+            echo "(This might be expected if model isn't trained yet)"
+          fi
+          
+          echo ""
           echo "✅ Smoke tests completed!"
 
       - name: Deployment summary
         run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🎉 Deployment Process Complete!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Repository:  ${{ github.repository }}"
-          echo "Branch:      ${{ github.ref_name }}"
-          echo "Commit:      ${{ github.sha }}"
-          echo "Deployed by: ${{ github.actor }}"
-          echo "Time:        $(date)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📦 Repository:   ${{ github.repository }}"
+          echo "🌿 Branch:       ${{ github.ref_name }}"
+          echo "📝 Commit:       ${{ github.sha }}"
+          echo "👤 Deployed by:  ${{ github.actor }}"
+          echo "⏰ Time:         $(date)"
+          echo ""
           
           if [ -n "${{ secrets.RENDER_SERVICE_URL }}" ]; then
-            echo "Service URL: ${{ secrets.RENDER_SERVICE_URL }}"
-            echo "Visit:       ${{ secrets.RENDER_SERVICE_URL }}"
+            echo "🌐 Service URL:  ${{ secrets.RENDER_SERVICE_URL }}"
+            echo "📚 API Docs:     ${{ secrets.RENDER_SERVICE_URL }}/docs"
+            echo ""
           fi
           
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Next steps:"
-          echo "1. Check Render dashboard for deployment status"
-          echo "2. Monitor application logs in Render"
-          echo "3. Test the application manually"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Next steps:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "1. ✓ Check Render dashboard for final deployment status"
+          echo "2. ✓ Monitor application logs in Render"
+          echo "3. ✓ Test the application manually"
+          echo "4. ✓ Verify all endpoints are working correctly"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
 
 
   cleanup:
