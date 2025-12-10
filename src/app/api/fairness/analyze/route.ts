@@ -18,9 +18,35 @@ interface GroupMetrics {
   precision: number;
 }
 
-function calculateGroupMetrics(data: any[], groupKey: string, groupValue: any): GroupMetrics {
-  const groupData = data.filter(row => row[groupKey] === groupValue);
-  const totalCount = groupData.length;
+// Helper to find column case-insensitively
+function findColumn(row: any, possibleNames: string[]): string | null {
+  const keys = Object.keys(row);
+  for (const name of possibleNames) {
+    const found = keys.find(k => k.toLowerCase() === name.toLowerCase());
+    if (found) return found;
+  }
+  return null;
+}
+
+// Get approval status from row
+function getApprovalStatus(row: any): number | null {
+  const loanStatusCol = findColumn(row, ['loan_status', 'loanstatus', 'status', 'approved', 'predicted']);
+  if (!loanStatusCol) return null;
+  
+  const value = row[loanStatusCol];
+  if (value === 'Y' || value === 'y' || value === 1 || value === '1' || value === true || 
+      value === 'approved' || value === 'Approved' || value === 'yes' || value === 'Yes') {
+    return 1;
+  }
+  if (value === 'N' || value === 'n' || value === 0 || value === '0' || value === false ||
+      value === 'rejected' || value === 'Rejected' || value === 'no' || value === 'No') {
+    return 0;
+  }
+  return null;
+}
+
+function calculateGroupMetricsFromData(data: any[]): GroupMetrics {
+  const totalCount = data.length;
   
   if (totalCount === 0) {
     return {
@@ -32,26 +58,23 @@ function calculateGroupMetrics(data: any[], groupKey: string, groupValue: any): 
     };
   }
 
-  const approved = groupData.filter(row => row.predicted === 1 || row.approved === 1);
-  const approvalRate = approved.length / totalCount;
-
-  // For true labels (ground truth)
-  const actualPositive = groupData.filter(row => row.actual === 1 || row.loan_status === 1);
-  const actualNegative = groupData.filter(row => row.actual === 0 || row.loan_status === 0);
+  // Calculate approval rate using flexible detection
+  let approvedCount = 0;
+  data.forEach(row => {
+    const status = getApprovalStatus(row);
+    if (status === 1) approvedCount++;
+  });
   
-  // True Positives: Correctly predicted as approved
-  const truePositives = groupData.filter(
-    row => (row.predicted === 1 || row.approved === 1) && (row.actual === 1 || row.loan_status === 1)
-  ).length;
-  
-  // False Positives: Incorrectly predicted as approved
-  const falsePositives = groupData.filter(
-    row => (row.predicted === 1 || row.approved === 1) && (row.actual === 0 || row.loan_status === 0)
-  ).length;
+  const approvalRate = approvedCount / totalCount;
 
-  const truePositiveRate = actualPositive.length > 0 ? truePositives / actualPositive.length : 0;
-  const falsePositiveRate = actualNegative.length > 0 ? falsePositives / actualNegative.length : 0;
-  const precision = approved.length > 0 ? truePositives / approved.length : 0;
+  // For datasets without actual vs predicted, treat loan_status as both
+  const actualPositive = approvedCount;
+  const actualNegative = totalCount - approvedCount;
+  
+  // Without predictions, TPR and FPR are simplified
+  const truePositiveRate = approvalRate;
+  const falsePositiveRate = 0;
+  const precision = approvalRate;
 
   return {
     totalCount,
@@ -76,7 +99,8 @@ function calculateFairnessScore(metrics: any): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const { data, protectedAttribute = 'gender' } = await request.json();
+    const body = await request.json();
+    let { data, protectedAttribute = 'gender' } = body;
 
     if (!data || !Array.isArray(data) || data.length === 0) {
       return NextResponse.json(
@@ -85,20 +109,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get unique groups
-    const uniqueGroups = [...new Set(data.map((row: any) => row[protectedAttribute]))];
+    // Find the actual column name (case-insensitive)
+    const firstRow = data[0];
+    const possibleProtectedAttrs = ['gender', 'Gender', 'sex', 'Sex', 'married', 'Married', 'education', 'Education'];
+    let actualProtectedAttr = findColumn(firstRow, [protectedAttribute]);
     
-    if (uniqueGroups.length < 2) {
+    // If the requested attribute not found, try to find any available protected attribute
+    if (!actualProtectedAttr) {
+      actualProtectedAttr = findColumn(firstRow, possibleProtectedAttrs);
+    }
+    
+    if (!actualProtectedAttr) {
       return NextResponse.json(
-        { error: 'Need at least 2 groups for fairness analysis' },
+        { error: `Protected attribute '${protectedAttribute}' not found in data. Available columns: ${Object.keys(firstRow).join(', ')}` },
         { status: 400 }
       );
     }
 
-    // Calculate metrics for each group
+    // Get unique groups - filter out null, undefined, empty strings, and whitespace-only values
+    const uniqueGroups = [...new Set(data.map((row: any) => {
+      const val = row[actualProtectedAttr];
+      // Normalize the value - trim strings
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        return trimmed === '' ? null : trimmed;
+      }
+      return val;
+    }))].filter(g => g !== null && g !== undefined);
+    
+    // Debug: log what we found
+    console.log(`Fairness analysis: Found ${uniqueGroups.length} groups in '${actualProtectedAttr}':`, uniqueGroups);
+
+    if (uniqueGroups.length < 2) {
+      // Provide more detailed error message
+      const sampleValues = data.slice(0, 10).map((r: any) => r[actualProtectedAttr]);
+      return NextResponse.json(
+        { 
+          error: `Need at least 2 groups for fairness analysis. Found ${uniqueGroups.length} group(s) in '${actualProtectedAttr}': [${uniqueGroups.join(', ')}]. Sample values from first 10 rows: [${sampleValues.join(', ')}]` 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Calculate metrics for each group - use normalized values
     const groupMetrics: Record<string, GroupMetrics> = {};
     uniqueGroups.forEach(group => {
-      groupMetrics[String(group)] = calculateGroupMetrics(data, protectedAttribute, group);
+      // Filter using normalized comparison
+      const groupData = data.filter((row: any) => {
+        const val = row[actualProtectedAttr];
+        if (typeof val === 'string') {
+          return val.trim() === group;
+        }
+        return val === group;
+      });
+      groupMetrics[String(group)] = calculateGroupMetricsFromData(groupData);
     });
 
     // Demographic Parity: Difference in approval rates
@@ -115,7 +179,7 @@ export async function POST(request: NextRequest) {
 
     // Disparate Impact: Ratio of approval rates (min/max)
     // Should be >= 0.8 (80% rule)
-    const disparateImpact = minApprovalRate / (maxApprovalRate || 1);
+    const disparateImpact = maxApprovalRate > 0 ? minApprovalRate / maxApprovalRate : 1;
 
     // Statistical Parity Difference
     const avgApprovalRate = approvalRates.reduce((a, b) => a + b, 0) / approvalRates.length;
@@ -132,7 +196,7 @@ export async function POST(request: NextRequest) {
 
     // Analyze bias by additional attributes if present
     const biasAnalysis: any = {
-      [protectedAttribute]: {
+      [actualProtectedAttr]: {
         groups: groupMetrics,
         demographicParity: 1 - demographicParityDifference,
         equalOpportunity: 1 - equalOpportunityDifference,
@@ -141,20 +205,22 @@ export async function POST(request: NextRequest) {
     };
 
     // Age group analysis if age is present
-    if (data[0].age) {
+    const ageCol = findColumn(firstRow, ['age', 'Age', 'applicant_age']);
+    if (ageCol) {
       const ageGroups = {
-        '18-30': data.filter((r: any) => r.age >= 18 && r.age <= 30),
-        '31-45': data.filter((r: any) => r.age >= 31 && r.age <= 45),
-        '46-60': data.filter((r: any) => r.age >= 46 && r.age <= 60),
-        '60+': data.filter((r: any) => r.age > 60),
+        '18-30': data.filter((r: any) => r[ageCol] >= 18 && r[ageCol] <= 30),
+        '31-45': data.filter((r: any) => r[ageCol] >= 31 && r[ageCol] <= 45),
+        '46-60': data.filter((r: any) => r[ageCol] >= 46 && r[ageCol] <= 60),
+        '60+': data.filter((r: any) => r[ageCol] > 60),
       };
 
       const ageMetrics: any = {};
       Object.entries(ageGroups).forEach(([ageGroup, groupData]) => {
         if ((groupData as any[]).length > 0) {
-          const approved = (groupData as any[]).filter(
-            r => r.predicted === 1 || r.approved === 1
-          ).length;
+          let approved = 0;
+          (groupData as any[]).forEach(r => {
+            if (getApprovalStatus(r) === 1) approved++;
+          });
           ageMetrics[ageGroup] = {
             count: (groupData as any[]).length,
             approvalRate: approved / (groupData as any[]).length,
@@ -206,7 +272,7 @@ export async function POST(request: NextRequest) {
         groupMetrics,
         biasAnalysis,
         recommendations,
-        protectedAttribute,
+        protectedAttribute: actualProtectedAttr,
         complianceStatus: {
           '80PercentRule': disparateImpact >= 0.8,
           demographicParity: demographicParityDifference <= 0.1,

@@ -24,9 +24,24 @@ export default function FairnessAuditSection({ data }: FairnessAuditSectionProps
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Extract rows from data object
+  const getDataRows = () => {
+    if (!data) return []
+    // If data has rows property, use it; otherwise assume data is already an array
+    if (data.rows && Array.isArray(data.rows)) {
+      return data.rows
+    }
+    if (Array.isArray(data)) {
+      return data
+    }
+    return []
+  }
+
   const analyzeFairness = async () => {
-    if (!data || data.length === 0) {
-      setError("No data available for fairness analysis")
+    const rows = getDataRows()
+    
+    if (rows.length === 0) {
+      setError("No data available for fairness analysis. Please upload a dataset first.")
       return
     }
 
@@ -40,7 +55,7 @@ export default function FairnessAuditSection({ data }: FairnessAuditSectionProps
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: data,
+          data: rows,
           protectedAttribute: 'gender'
         })
       })
@@ -62,7 +77,8 @@ export default function FairnessAuditSection({ data }: FairnessAuditSectionProps
 
   // Auto-analyze when data is available
   useEffect(() => {
-    if (data && data.length > 0 && !fairnessData && !loading) {
+    const rows = getDataRows()
+    if (rows.length > 0 && !fairnessData && !loading) {
       analyzeFairness()
     }
   }, [data])

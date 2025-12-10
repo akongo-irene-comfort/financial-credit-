@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Upload, BarChart3, Brain, Scale, Lightbulb, BookOpen } from "lucide-react"
@@ -14,6 +14,31 @@ import ExplainabilitySection from "@/components/dashboard/explainability-section
 
 export default function DashboardPage() {
   const [uploadedData, setUploadedData] = useState<any>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('creditScoringData')
+    if (savedData) {
+      try {
+        setUploadedData(JSON.parse(savedData))
+      } catch (e) {
+        console.error('Failed to parse saved data:', e)
+      }
+    }
+    setIsLoaded(true)
+  }, [])
+
+  // Save data to localStorage when it changes
+  useEffect(() => {
+    if (isLoaded) {
+      if (uploadedData) {
+        localStorage.setItem('creditScoringData', JSON.stringify(uploadedData))
+      } else {
+        localStorage.removeItem('creditScoringData')
+      }
+    }
+  }, [uploadedData, isLoaded])
 
   return (
     <div className="min-h-screen bg-background">
